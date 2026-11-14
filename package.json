@@ -1,0 +1,16 @@
+{
+  "name": "the-grey-house-cafe",
+  "version": "1.0.0",
+  "description": "The Grey House Cafe & Rooftop Lounge Bareilly",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "restaurant",
+    "cafe",
+    "bareilly"
+  ],
+  "author": "",
+  "license": "ISC"
+}

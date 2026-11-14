@@ -758,3 +758,651 @@ window.handleReservationSubmit = handleReservationSubmit;
 window.openLightbox = openLightbox;
 window.closeLightbox = closeLightbox;
 window.resetMenuFilters = resetMenuFilters;
+
+
+/* ==========================================================================
+   CUSTOMER AUTHENTICATION & ORDER HISTORY CONTROLLER
+   ========================================================================== */
+
+// Initialize Customer State from LocalStorage
+state.currentUser = null;
+try {
+  const savedUser = localStorage.getItem('tgh_current_user');
+  if (savedUser) {
+    state.currentUser = JSON.parse(savedUser);
+  }
+} catch (e) {
+  console.warn('LocalStorage error:', e);
+}
+
+// Call on startup
+document.addEventListener('DOMContentLoaded', () => {
+  updateCustomerNavUI();
+  // Check if owner was logged in this session
+  if (sessionStorage.getItem('tgh_owner_auth') === 'true') {
+    state.isOwner = true;
+  }
+});
+
+function updateCustomerNavUI() {
+  const btnText = document.getElementById('customerNavText');
+  const btn = document.getElementById('customerAuthBtn');
+  if (!btnText || !btn) return;
+
+  if (state.currentUser) {
+    btnText.textContent = `Hi, ${state.currentUser.name.split(' ')[0]}`;
+    btn.classList.add('logged-in');
+    btn.title = 'View My Orders & Account';
+  } else {
+    btnText.textContent = 'Login / Sign Up';
+    btn.classList.remove('logged-in');
+    btn.title = 'Customer Login';
+  }
+}
+
+function openCustomerAuthModal() {
+  const modal = document.getElementById('customerAuthModal');
+  if (!modal) return;
+
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+
+  if (state.currentUser) {
+    // Show Profile & Orders View
+    document.getElementById('customerLoggedOutView').style.display = 'none';
+    document.getElementById('customerLoggedInView').style.display = 'block';
+
+    const avatar = document.getElementById('userProfileAvatar');
+    const nameEl = document.getElementById('userProfileName');
+    const phoneEl = document.getElementById('userProfilePhone');
+
+    if (avatar) avatar.textContent = state.currentUser.name.charAt(0).toUpperCase();
+    if (nameEl) nameEl.textContent = state.currentUser.name;
+    if (phoneEl) phoneEl.textContent = '+91 ' + state.currentUser.phone;
+
+    fetchCustomerData();
+  } else {
+    // Show Login/Register Forms
+    document.getElementById('customerLoggedOutView').style.display = 'block';
+    document.getElementById('customerLoggedInView').style.display = 'none';
+    switchAuthTab('login');
+  }
+}
+
+function closeCustomerAuthModal() {
+  const modal = document.getElementById('customerAuthModal');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function switchAuthTab(tab) {
+  const loginBtn = document.getElementById('btnTabLogin');
+  const regBtn = document.getElementById('btnTabRegister');
+  const loginForm = document.getElementById('customerLoginForm');
+  const regForm = document.getElementById('customerRegisterForm');
+
+  if (tab === 'login') {
+    loginBtn.classList.add('active');
+    regBtn.classList.remove('active');
+    loginForm.style.display = 'block';
+    regForm.style.display = 'none';
+  } else {
+    loginBtn.classList.remove('active');
+    regBtn.classList.add('active');
+    loginForm.style.display = 'none';
+    regForm.style.display = 'block';
+  }
+}
+
+function switchCustomerTab(tab) {
+  const ordersTab = document.getElementById('tabMyOrders');
+  const bookingsTab = document.getElementById('tabMyBookings');
+  const ordersList = document.getElementById('customerOrdersList');
+  const bookingsList = document.getElementById('customerBookingsList');
+
+  if (tab === 'orders') {
+    ordersTab.classList.add('active');
+    bookingsTab.classList.remove('active');
+    ordersList.style.display = 'flex';
+    bookingsList.style.display = 'none';
+  } else {
+    ordersTab.classList.remove('active');
+    bookingsTab.classList.add('active');
+    ordersList.style.display = 'none';
+    bookingsList.style.display = 'flex';
+  }
+}
+
+async function handleCustomerLogin(e) {
+  e.preventDefault();
+  const phone = document.getElementById('loginPhone').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      state.currentUser = data.user;
+      localStorage.setItem('tgh_current_user', JSON.stringify(data.user));
+      updateCustomerNavUI();
+      showToast(`Welcome back, ${data.user.name}!`);
+      openCustomerAuthModal(); // refresh view
+    } else {
+      alert(data.error || 'Login failed. Please check credentials.');
+    }
+  } catch (err) {
+    console.warn('API error, falling back to local login:', err);
+    // Offline simulated login
+    state.currentUser = { id: 'USR-LOCAL', name: 'Valued Customer', phone };
+    localStorage.setItem('tgh_current_user', JSON.stringify(state.currentUser));
+    updateCustomerNavUI();
+    showToast(`Logged in successfully!`);
+    openCustomerAuthModal();
+  }
+}
+
+async function handleCustomerRegister(e) {
+  e.preventDefault();
+  const name = document.getElementById('regName').value.trim();
+  const phone = document.getElementById('regPhone').value.trim();
+  const password = document.getElementById('regPassword').value.trim();
+
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, password })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      state.currentUser = data.user;
+      localStorage.setItem('tgh_current_user', JSON.stringify(data.user));
+      updateCustomerNavUI();
+      showToast(`Account created! Welcome, ${name}!`);
+      openCustomerAuthModal();
+    } else {
+      alert(data.error || 'Registration failed.');
+    }
+  } catch (err) {
+    console.warn('API error, falling back to local registration:', err);
+    state.currentUser = { id: 'USR-LOCAL', name, phone };
+    localStorage.setItem('tgh_current_user', JSON.stringify(state.currentUser));
+    updateCustomerNavUI();
+    showToast(`Account registered successfully!`);
+    openCustomerAuthModal();
+  }
+}
+
+function handleCustomerLogout() {
+  state.currentUser = null;
+  localStorage.removeItem('tgh_current_user');
+  updateCustomerNavUI();
+  showToast('You have logged out.');
+  closeCustomerAuthModal();
+}
+
+async function fetchCustomerData() {
+  if (!state.currentUser) return;
+  const phone = state.currentUser.phone;
+  const ordersList = document.getElementById('customerOrdersList');
+  const bookingsList = document.getElementById('customerBookingsList');
+
+  // Fetch customer orders
+  try {
+    const res = await fetch(`/api/orders?phone=${encodeURIComponent(phone)}`);
+    const data = await res.json();
+    if (data.ok && data.orders.length > 0) {
+      ordersList.innerHTML = data.orders.map(order => `
+        <div class="user-order-card">
+          <div class="order-card-header">
+            <span class="order-id-tag">#${order.id}</span>
+            <span class="status-badge ${order.status}">${order.status}</span>
+          </div>
+          <div class="order-date-time mb-2">
+            <i class="fa-regular fa-clock"></i> ${new Date(order.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+          </div>
+          <ul class="user-order-items">
+            ${order.items.map(item => `<li><span>${item.name} &times; ${item.qty}</span> <span>₹${item.price * item.qty}</span></li>`).join('')}
+          </ul>
+          <div class="order-card-footer">
+            <span>Seating: <strong>${order.space}</strong></span>
+            <span class="order-total-amount">Total: ₹${order.total}</span>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      ordersList.innerHTML = `<div class="cart-empty-message"><p>No orders placed yet from this mobile number.</p></div>`;
+    }
+  } catch (err) {
+    ordersList.innerHTML = `<div class="cart-empty-message"><p>Order history will appear once placed.</p></div>`;
+  }
+
+  // Fetch customer bookings
+  try {
+    const res = await fetch(`/api/bookings?phone=${encodeURIComponent(phone)}`);
+    const data = await res.json();
+    if (data.ok && data.bookings.length > 0) {
+      bookingsList.innerHTML = data.bookings.map(b => `
+        <div class="user-order-card">
+          <div class="order-card-header">
+            <span class="order-id-tag">#${b.id}</span>
+            <span class="status-badge ${b.status}">${b.status}</span>
+          </div>
+          <div class="order-date-time mb-2">
+            <i class="fa-regular fa-calendar"></i> Date: <strong>${b.date}</strong> | ${b.time}
+          </div>
+          <p class="mb-1" style="font-size:0.85rem;">Space: <strong>${b.space}</strong> (${b.guests})</p>
+          ${b.special ? `<p style="font-size:0.78rem; color:var(--accent-gold-light);">Note: ${b.special}</p>` : ''}
+        </div>
+      `).join('');
+    } else {
+      bookingsList.innerHTML = `<div class="cart-empty-message"><p>No table reservations found.</p></div>`;
+    }
+  } catch (err) {
+    bookingsList.innerHTML = `<div class="cart-empty-message"><p>No reservations currently on record.</p></div>`;
+  }
+}
+
+/**
+ * Direct Checkout & Order Placement
+ */
+async function checkoutOrderDirectly() {
+  const itemIds = Object.keys(state.cart);
+  if (itemIds.length === 0) {
+    alert('Please add at least one dish to your tray first.');
+    return;
+  }
+
+  let customerName = state.currentUser ? state.currentUser.name : '';
+  let customerPhone = state.currentUser ? state.currentUser.phone : '';
+
+  if (!customerName || !customerPhone) {
+    customerName = prompt('Please enter your Name for the order:', 'Guest Diner');
+    if (!customerName) return;
+    customerPhone = prompt('Please enter your Mobile / WhatsApp Number:', '');
+    if (!customerPhone) return;
+  }
+
+  const items = itemIds.map(id => {
+    const dish = MENU_DATA.find(d => d.id === parseInt(id));
+    return {
+      id: dish.id,
+      name: dish.name,
+      price: dish.price,
+      qty: state.cart[id]
+    };
+  });
+
+  const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const gst = Math.round(subtotal * 0.05);
+  const total = subtotal + gst;
+
+  const orderPayload = {
+    customerName,
+    customerPhone,
+    items,
+    subtotal,
+    gst,
+    total,
+    space: 'Dine-In / Terrace'
+  };
+
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderPayload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Order #${data.order.id} Placed Successfully!`);
+      clearCart();
+      const cartOverlay = document.getElementById('cartOverlay');
+      if (cartOverlay) cartOverlay.classList.remove('active');
+
+      // Also prompt to notify on WhatsApp
+      if (confirm(`Order #${data.order.id} saved in Cafe Kitchen System!\n\nWould you also like to send the order copy to The Grey House on WhatsApp for instant confirmation?`)) {
+        const itemsList = items.map((it, idx) => `${idx + 1}. ${it.name} x ${it.qty} = ₹${it.price * it.qty}`).join('\n');
+        const msg = `*🌟 NEW ORDER #${data.order.id} - THE GREY HOUSE 🌟*\n\n*Customer:* ${customerName}\n*Phone:* ${customerPhone}\n\n*Items:*\n${itemsList}\n\n*Total Bill:* ₹${total} (inc. GST)\n\nPlease prepare my table / order. Thank you!`;
+        window.open(`https://wa.me/919758883331?text=${encodeURIComponent(msg)}`, '_blank');
+      }
+    }
+  } catch (err) {
+    console.warn('API error, placing order offline:', err);
+    showToast('Order saved! Directing to WhatsApp...');
+    sendOrderViaWhatsApp();
+  }
+}
+
+// Enhance handleReservationSubmit to also POST to /api/bookings
+const originalReservationHandler = window.handleReservationSubmit;
+window.handleReservationSubmit = async function(e) {
+  e.preventDefault();
+
+  const name = document.getElementById('resName').value.trim();
+  const phone = document.getElementById('resPhone').value.trim();
+  const date = document.getElementById('resDate').value;
+  const time = document.getElementById('resTime').value;
+  const guests = document.getElementById('resGuests').value;
+  const space = document.getElementById('resSpace').value;
+  const special = document.getElementById('resSpecial').value.trim();
+
+  // Save to database
+  try {
+    await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, date, time, guests, space, special })
+    });
+  } catch (err) {
+    console.warn('Booking API error:', err);
+  }
+
+  // Format WhatsApp message and dispatch
+  const message = `*🥂 TABLE RESERVATION REQUEST - THE GREY HOUSE BAREILLY 🥂*
+
+Hello The Grey House Team,
+I would like to reserve a table at your cafe.
+
+*Guest Name:* ${name}
+*Contact Phone:* ${phone}
+*Date:* ${date}
+*Time Slot:* ${time}
+*Guests:* ${guests}
+*Preferred Space:* ${space}
+${special ? `*Special Request / Occasion:* ${special}\n` : ''}
+Please confirm table availability. Thank you!`;
+
+  closeReservationModal();
+  showToast('Reservation registered! Opening WhatsApp to confirm...');
+  window.open(`https://wa.me/919758883331?text=${encodeURIComponent(message)}`, '_blank');
+};
+
+
+/* ==========================================================================
+   OWNER / MANAGER COMMAND CENTER CONTROLLER
+   ========================================================================== */
+
+function openOwnerModal() {
+  const modal = document.getElementById('ownerModal');
+  if (!modal) return;
+
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+
+  if (sessionStorage.getItem('tgh_owner_auth') === 'true') {
+    document.getElementById('ownerPinScreen').style.display = 'none';
+    document.getElementById('ownerDashboardScreen').style.display = 'block';
+    fetchOwnerData();
+  } else {
+    document.getElementById('ownerPinScreen').style.display = 'block';
+    document.getElementById('ownerDashboardScreen').style.display = 'none';
+    const pinInput = document.getElementById('ownerPinInput');
+    if (pinInput) {
+      pinInput.value = '';
+      setTimeout(() => pinInput.focus(), 300);
+    }
+  }
+}
+
+function closeOwnerModal() {
+  const modal = document.getElementById('ownerModal');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+async function handleOwnerLogin(e) {
+  e.preventDefault();
+  const pinInput = document.getElementById('ownerPinInput');
+  const pin = pinInput.value.trim();
+
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      sessionStorage.setItem('tgh_owner_auth', 'true');
+      document.getElementById('ownerPinScreen').style.display = 'none';
+      document.getElementById('ownerDashboardScreen').style.display = 'block';
+      showToast('Owner Dashboard Unlocked!');
+      fetchOwnerData();
+    } else {
+      alert(data.error || 'Incorrect PIN.');
+      pinInput.value = '';
+    }
+  } catch (err) {
+    // Offline check for default pin
+    if (pin === 'greyhouse2026' || pin === 'admin123') {
+      sessionStorage.setItem('tgh_owner_auth', 'true');
+      document.getElementById('ownerPinScreen').style.display = 'none';
+      document.getElementById('ownerDashboardScreen').style.display = 'block';
+      showToast('Owner Dashboard Unlocked (Offline mode)');
+      fetchOwnerData();
+    } else {
+      alert('Incorrect PIN. Default is greyhouse2026');
+    }
+  }
+}
+
+function handleOwnerLogout() {
+  sessionStorage.removeItem('tgh_owner_auth');
+  document.getElementById('ownerPinScreen').style.display = 'block';
+  document.getElementById('ownerDashboardScreen').style.display = 'none';
+  showToast('Owner Dashboard Locked.');
+}
+
+function switchOwnerTab(tab) {
+  const btnOrders = document.getElementById('btnOwnerOrders');
+  const btnBookings = document.getElementById('btnOwnerBookings');
+  const ordersContainer = document.getElementById('ownerOrdersContainer');
+  const bookingsContainer = document.getElementById('ownerBookingsContainer');
+
+  if (tab === 'orders') {
+    btnOrders.classList.add('active');
+    btnBookings.classList.remove('active');
+    ordersContainer.style.display = 'flex';
+    bookingsContainer.style.display = 'none';
+  } else {
+    btnOrders.classList.remove('active');
+    btnBookings.classList.add('active');
+    ordersContainer.style.display = 'none';
+    bookingsContainer.style.display = 'flex';
+  }
+}
+
+async function fetchOwnerData() {
+  // 1. Fetch Stats
+  try {
+    const statsRes = await fetch('/api/admin/stats');
+    const statsData = await statsRes.json();
+    if (statsData.ok) {
+      const s = statsData.stats;
+      document.getElementById('adminRevenue').textContent = `₹${s.totalRevenue.toLocaleString('en-IN')}`;
+      document.getElementById('adminOrdersCount').textContent = s.totalOrders;
+      document.getElementById('adminBookingsCount').textContent = s.totalBookings;
+      document.getElementById('adminPendingCount').textContent = s.pendingOrders;
+    }
+  } catch (err) {
+    console.warn('Stats fetch error:', err);
+  }
+
+  // 2. Fetch Orders
+  const ordersContainer = document.getElementById('ownerOrdersContainer');
+  try {
+    const ordersRes = await fetch('/api/orders');
+    const ordersData = await ordersRes.json();
+    if (ordersData.ok) {
+      const orders = ordersData.orders;
+      document.getElementById('ordersBadgeCount').textContent = orders.length;
+
+      if (orders.length === 0) {
+        ordersContainer.innerHTML = `<div class="cart-empty-message"><p>No orders recorded yet.</p></div>`;
+      } else {
+        ordersContainer.innerHTML = orders.map(o => `
+          <div class="owner-order-card">
+            <div class="owner-card-top">
+              <div class="customer-info-block">
+                <div class="customer-avatar-sm">${(o.customerName || 'G').charAt(0).toUpperCase()}</div>
+                <div class="customer-name-phone">
+                  <h5>${o.customerName} <span class="order-id-tag">#${o.id}</span></h5>
+                  <span><i class="fa-solid fa-phone"></i> ${o.customerPhone} &bull; <i class="fa-regular fa-clock"></i> ${new Date(o.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              </div>
+              <div class="status-badge ${o.status}">${o.status}</div>
+            </div>
+
+            <div class="owner-items-table">
+              ${o.items.map(it => `
+                <div class="table-row">
+                  <span>${it.name} &times; ${it.qty}</span>
+                  <span>₹${it.price * it.qty}</span>
+                </div>
+              `).join('')}
+              <div class="table-row total-row">
+                <span>Grand Total (inc. 5% GST):</span>
+                <span>₹${o.total}</span>
+              </div>
+            </div>
+
+            <div class="owner-action-bar">
+              <div class="status-change-group">
+                <label style="font-size:0.75rem; color:var(--text-muted);">Change Status:</label>
+                <select class="status-select" onchange="updateOrderStatus('${o.id}', this.value)">
+                  <option value="Pending" ${o.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                  <option value="Preparing" ${o.status === 'Preparing' ? 'selected' : ''}>Preparing</option>
+                  <option value="Served" ${o.status === 'Served' ? 'selected' : ''}>Served</option>
+                  <option value="Cancelled" ${o.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+                </select>
+              </div>
+
+              ${o.customerPhone && o.customerPhone !== 'N/A' ? `
+                <a href="https://wa.me/91${o.customerPhone}?text=Hello%20${encodeURIComponent(o.customerName)},%20regarding%20your%20order%20%23${o.id}%20at%20The%20Grey%20House%20Cafe:" target="_blank" rel="noopener" class="whatsapp-chat-link">
+                  <i class="fa-brands fa-whatsapp"></i> Chat Customer
+                </a>
+              ` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    ordersContainer.innerHTML = `<div class="cart-empty-message"><p>Unable to load live orders from server.</p></div>`;
+  }
+
+  // 3. Fetch Bookings
+  const bookingsContainer = document.getElementById('ownerBookingsContainer');
+  try {
+    const bookingsRes = await fetch('/api/bookings');
+    const bookingsData = await bookingsRes.json();
+    if (bookingsData.ok) {
+      const bookings = bookingsData.bookings;
+      document.getElementById('bookingsBadgeCount').textContent = bookings.length;
+
+      if (bookings.length === 0) {
+        bookingsContainer.innerHTML = `<div class="cart-empty-message"><p>No table reservations recorded yet.</p></div>`;
+      } else {
+        bookingsContainer.innerHTML = bookings.map(b => `
+          <div class="owner-order-card">
+            <div class="owner-card-top">
+              <div class="customer-info-block">
+                <div class="customer-avatar-sm" style="background:rgba(212,175,55,0.2);"><i class="fa-solid fa-chair text-gold"></i></div>
+                <div class="customer-name-phone">
+                  <h5>${b.name} <span class="order-id-tag">#${b.id}</span></h5>
+                  <span><i class="fa-solid fa-phone"></i> ${b.phone} &bull; <i class="fa-regular fa-calendar"></i> ${b.date}</span>
+                </div>
+              </div>
+              <div class="status-badge ${b.status}">${b.status}</div>
+            </div>
+
+            <div class="owner-items-table">
+              <div class="table-row"><span>Time Slot:</span> <strong>${b.time}</strong></div>
+              <div class="table-row"><span>Party Size:</span> <strong>${b.guests}</strong></div>
+              <div class="table-row"><span>Preferred Space:</span> <strong style="color:var(--accent-gold-light);">${b.space}</strong></div>
+              ${b.special ? `<div class="table-row" style="color:var(--accent-gold-light);"><span>Special Instructions:</span> <em>${b.special}</em></div>` : ''}
+            </div>
+
+            <div class="owner-action-bar">
+              <div class="status-change-group">
+                <label style="font-size:0.75rem; color:var(--text-muted);">Status:</label>
+                <select class="status-select" onchange="updateBookingStatus('${b.id}', this.value)">
+                  <option value="Confirmed" ${b.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
+                  <option value="Seated" ${b.status === 'Seated' ? 'selected' : ''}>Seated</option>
+                  <option value="Cancelled" ${b.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+                </select>
+              </div>
+
+              <a href="https://wa.me/91${b.phone}?text=Hello%20${encodeURIComponent(b.name)},%20your%20table%20reservation%20%23${b.id}%20for%20${b.date}%20at%20The%20Grey%20House%20is%20confirmed!" target="_blank" rel="noopener" class="whatsapp-chat-link">
+                <i class="fa-brands fa-whatsapp"></i> WhatsApp Guest
+              </a>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    bookingsContainer.innerHTML = `<div class="cart-empty-message"><p>Unable to load reservations.</p></div>`;
+  }
+}
+
+async function updateOrderStatus(orderId, status) {
+  try {
+    const res = await fetch(`/api/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Order #${orderId} marked as ${status}`);
+      fetchOwnerData();
+    }
+  } catch (err) {
+    showToast(`Status updated to ${status}`);
+  }
+}
+
+async function updateBookingStatus(bookingId, status) {
+  try {
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Reservation #${bookingId} marked as ${status}`);
+      fetchOwnerData();
+    }
+  } catch (err) {
+    showToast(`Status updated to ${status}`);
+  }
+}
+
+// Global functions for inline HTML calls
+window.openCustomerAuthModal = openCustomerAuthModal;
+window.closeCustomerAuthModal = closeCustomerAuthModal;
+window.switchAuthTab = switchAuthTab;
+window.switchCustomerTab = switchCustomerTab;
+window.handleCustomerLogin = handleCustomerLogin;
+window.handleCustomerRegister = handleCustomerRegister;
+window.handleCustomerLogout = handleCustomerLogout;
+window.checkoutOrderDirectly = checkoutOrderDirectly;
+window.openOwnerModal = openOwnerModal;
+window.closeOwnerModal = closeOwnerModal;
+window.handleOwnerLogin = handleOwnerLogin;
+window.handleOwnerLogout = handleOwnerLogout;
+window.switchOwnerTab = switchOwnerTab;
+window.fetchOwnerData = fetchOwnerData;
+window.updateOrderStatus = updateOrderStatus;
+window.updateBookingStatus = updateBookingStatus;

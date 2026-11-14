@@ -37,6 +37,10 @@
         <a href="https://www.instagram.com/thegreyhouse_india/" target="_blank" rel="noopener" class="insta-link">
           <i class="fa-brands fa-instagram"></i> @thegreyhouse_india
         </a>
+        <span class="divider">|</span>
+        <button class="owner-pill-btn" onclick="openOwnerModal()" title="Cafe Owner & Staff Portal">
+          <i class="fa-solid fa-shield-halved"></i> Owner Portal
+        </button>
       </div>
     </div>
   </aside>
@@ -64,6 +68,13 @@
 
       <!-- Nav Action CTAs -->
       <div class="nav-actions">
+        <!-- Customer Login/Account Button Container -->
+        <div id="customerNavContainer">
+          <button class="btn btn-outline btn-sm customer-auth-btn" id="customerAuthBtn" onclick="openCustomerAuthModal()">
+            <i class="fa-regular fa-user"></i> <span id="customerNavText">Login / Sign Up</span>
+          </button>
+        </div>
+
         <button class="cart-trigger-btn" id="cartOpenBtn" title="View Selected Items / Bill">
           <i class="fa-solid fa-receipt"></i>
           <span class="cart-label">My Tray</span>
@@ -96,6 +107,8 @@
       <a href="#gallery" class="drawer-link"><i class="fa-solid fa-camera"></i> Photo Tour</a>
       <a href="#reviews" class="drawer-link"><i class="fa-solid fa-star"></i> 1,700+ Google Reviews</a>
       <a href="#contact" class="drawer-link"><i class="fa-solid fa-map-location-dot"></i> Directions & Timings</a>
+      <a href="javascript:void(0)" class="drawer-link" onclick="openCustomerAuthModal(); closeDrawer();"><i class="fa-solid fa-user-circle"></i> Customer Login / Account</a>
+      <a href="javascript:void(0)" class="drawer-link text-gold" onclick="openOwnerModal(); closeDrawer();"><i class="fa-solid fa-shield-halved"></i> Owner Dashboard Portal</a>
     </div>
     <div class="drawer-footer">
       <button class="btn btn-gold w-100" onclick="openReservationModal(); closeDrawer();">
@@ -904,7 +917,10 @@
         </div>
 
         <div class="cart-cta-actions">
-          <button class="btn btn-whatsapp btn-block" onclick="sendOrderViaWhatsApp()">
+          <button class="btn btn-gold btn-block" onclick="checkoutOrderDirectly()">
+            <i class="fa-solid fa-bell-concierge"></i> Place Order & Save in System
+          </button>
+          <button class="btn btn-whatsapp btn-block mt-2" onclick="sendOrderViaWhatsApp()">
             <i class="fa-brands fa-whatsapp"></i> Send Pre-Order on WhatsApp
           </button>
           <button class="btn btn-outline btn-sm btn-block mt-2" onclick="clearCart()">
@@ -912,6 +928,193 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Customer Account & Authentication Modal -->
+  <div class="modal-overlay" id="customerAuthModal" aria-hidden="true">
+    <div class="modal-card auth-modal-card">
+      <div class="modal-header">
+        <div>
+          <span class="section-tag text-gold">CUSTOMER PORTAL</span>
+          <h3 class="modal-title" id="authModalTitle">Welcome to The Grey House</h3>
+        </div>
+        <button class="modal-close-btn" onclick="closeCustomerAuthModal()">&times;</button>
+      </div>
+
+      <!-- State 1: When user is logged in (Profile & Orders) -->
+      <div id="customerLoggedInView" style="display: none;">
+        <div class="user-profile-header">
+          <div class="profile-avatar" id="userProfileAvatar">U</div>
+          <div class="profile-details">
+            <h4 id="userProfileName">Customer Name</h4>
+            <p id="userProfilePhone">+91 XXXXX XXXXX</p>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="handleCustomerLogout()">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+          </button>
+        </div>
+
+        <div class="auth-tabs mt-3">
+          <button class="auth-tab-btn active" id="tabMyOrders" onclick="switchCustomerTab('orders')">
+            <i class="fa-solid fa-receipt"></i> My Orders
+          </button>
+          <button class="auth-tab-btn" id="tabMyBookings" onclick="switchCustomerTab('bookings')">
+            <i class="fa-solid fa-calendar-check"></i> My Table Bookings
+          </button>
+        </div>
+
+        <div class="customer-data-container mt-3" id="customerOrdersList">
+          <!-- Populated via JS -->
+        </div>
+        <div class="customer-data-container mt-3" id="customerBookingsList" style="display: none;">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+
+      <!-- State 2: When user is NOT logged in (Login / Register Tabs) -->
+      <div id="customerLoggedOutView">
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" id="btnTabLogin" onclick="switchAuthTab('login')">
+            <i class="fa-solid fa-right-to-bracket"></i> Customer Login
+          </button>
+          <button class="auth-tab-btn" id="btnTabRegister" onclick="switchAuthTab('register')">
+            <i class="fa-solid fa-user-plus"></i> New Sign Up
+          </button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="customerLoginForm" onsubmit="handleCustomerLogin(event)" class="mt-3">
+          <div class="form-group">
+            <label for="loginPhone"><i class="fa-solid fa-phone"></i> Mobile Number *</label>
+            <input type="tel" id="loginPhone" required placeholder="e.g. 9876543210">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword"><i class="fa-solid fa-lock"></i> Password *</label>
+            <input type="password" id="loginPassword" required placeholder="Enter your password">
+          </div>
+          <button type="submit" class="btn btn-gold btn-block mt-3">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Login to Account
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="customerRegisterForm" onsubmit="handleCustomerRegister(event)" class="mt-3" style="display: none;">
+          <div class="form-group">
+            <label for="regName"><i class="fa-solid fa-user"></i> Full Name *</label>
+            <input type="text" id="regName" required placeholder="e.g. Rahul Sharma">
+          </div>
+          <div class="form-group">
+            <label for="regPhone"><i class="fa-solid fa-phone"></i> Mobile Phone Number *</label>
+            <input type="tel" id="regPhone" required placeholder="e.g. 9876543210">
+          </div>
+          <div class="form-group">
+            <label for="regPassword"><i class="fa-solid fa-lock"></i> Set Password *</label>
+            <input type="password" id="regPassword" required placeholder="Create a secure password">
+          </div>
+          <button type="submit" class="btn btn-gold btn-block mt-3">
+            <i class="fa-solid fa-user-check"></i> Create Customer Account
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Owner & Manager Portal Modal (Admin Dashboard) -->
+  <div class="modal-overlay" id="ownerModal" aria-hidden="true">
+    <div class="modal-card owner-modal-card">
+      <div class="modal-header">
+        <div class="owner-header-title">
+          <span class="section-tag text-gold"><i class="fa-solid fa-shield-halved"></i> MANAGEMENT PORTAL</span>
+          <h3 class="modal-title">The Grey House Owner Dashboard</h3>
+        </div>
+        <button class="modal-close-btn" onclick="closeOwnerModal()">&times;</button>
+      </div>
+
+      <!-- Owner Screen 1: PIN Authentication -->
+      <div id="ownerPinScreen" class="owner-pin-view text-center">
+        <div class="owner-lock-icon">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <h4>Manager & Owner Access</h4>
+        <p class="owner-subtext">Enter your cafe master security PIN to view live orders, sales metrics & table reservations.</p>
+        
+        <form id="ownerPinForm" onsubmit="handleOwnerLogin(event)" class="mt-3">
+          <div class="form-group owner-pin-group">
+            <input type="password" id="ownerPinInput" required placeholder="Enter PIN (Default: greyhouse2026)" autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-gold btn-block mt-2">
+            <i class="fa-solid fa-key"></i> Unlock Dashboard
+          </button>
+          <p class="owner-hint">Master Default PIN: <code>greyhouse2026</code></p>
+        </form>
+      </div>
+
+      <!-- Owner Screen 2: Real-time Live Dashboard -->
+      <div id="ownerDashboardScreen" style="display: none;">
+        <!-- Owner Top Stats Row -->
+        <div class="owner-stats-grid">
+          <div class="owner-stat-card">
+            <div class="stat-icon-wrap gold"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+            <div class="stat-meta">
+              <span class="stat-title">Total Sales Revenue</span>
+              <h3 class="stat-val" id="adminRevenue">₹0</h3>
+            </div>
+          </div>
+          <div class="owner-stat-card">
+            <div class="stat-icon-wrap blue"><i class="fa-solid fa-receipt"></i></div>
+            <div class="stat-meta">
+              <span class="stat-title">Total Orders</span>
+              <h3 class="stat-val" id="adminOrdersCount">0</h3>
+            </div>
+          </div>
+          <div class="owner-stat-card">
+            <div class="stat-icon-wrap purple"><i class="fa-solid fa-calendar-check"></i></div>
+            <div class="stat-meta">
+              <span class="stat-title">Table Reservations</span>
+              <h3 class="stat-val" id="adminBookingsCount">0</h3>
+            </div>
+          </div>
+          <div class="owner-stat-card">
+            <div class="stat-icon-wrap orange"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <div class="stat-meta">
+              <span class="stat-title">Pending Orders</span>
+              <h3 class="stat-val" id="adminPendingCount">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Navigation Bar -->
+        <div class="owner-nav-bar mt-4">
+          <div class="owner-tabs">
+            <button class="owner-tab-btn active" id="btnOwnerOrders" onclick="switchOwnerTab('orders')">
+              <i class="fa-solid fa-bell-concierge"></i> Live Kitchen & Table Orders (<span id="ordersBadgeCount">0</span>)
+            </button>
+            <button class="owner-tab-btn" id="btnOwnerBookings" onclick="switchOwnerTab('bookings')">
+              <i class="fa-solid fa-chair"></i> Table Reservations (<span id="bookingsBadgeCount">0</span>)
+            </button>
+          </div>
+          <div class="owner-tools">
+            <button class="btn btn-outline btn-sm" onclick="fetchOwnerData()" title="Reload Data">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="handleOwnerLogout()" title="Logout">
+              <i class="fa-solid fa-lock"></i> Lock
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Live Orders Container -->
+        <div id="ownerOrdersContainer" class="owner-feed-list mt-3">
+          <!-- Rendered via JS -->
+        </div>
+
+        <!-- Tab 2: Table Bookings Container -->
+        <div id="ownerBookingsContainer" class="owner-feed-list mt-3" style="display: none;">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
     </div>
   </div>
 
